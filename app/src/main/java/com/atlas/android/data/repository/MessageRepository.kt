@@ -47,4 +47,13 @@ class MessageRepository @Inject constructor(
             Result.failure(e)
         }
     }
+    
+    suspend fun getAudioForText(text: String): Result<ByteArray> {
+        return try {
+            val response = api.textToSpeech(mapOf("text" to text))
+            Result.success(response.bytes())
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

@@ -1,18 +1,28 @@
 package com.atlas.android.ui.screens.main
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.atlas.android.domain.model.AtlasState
 import com.atlas.android.domain.model.Message
+import com.atlas.android.ui.components.AtlasAvatar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -21,6 +31,16 @@ fun MainScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    // Microphone permission launcher
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.startVoiceInput()
+        }
+    }
     
     // Auto-scroll to bottom when new messages arrive
     LaunchedEffect(state.messages.size) {
@@ -32,6 +52,7 @@ fun MainScreen(
     // Show error snackbar
     state.error?.let { error ->
         LaunchedEffect(error) {
+            snackbarHostState.showSnackbar(error)
             viewModel.clearError()
         }
     }
@@ -58,13 +79,27 @@ fun MainScreen(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // Avatar (centered above messages)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                AtlasAvatar(
+                    state = state.atlasState,
+                    size = 120
+                )
+            }
+            
             // Messages list
             LazyColumn(
                 state = listState,
@@ -97,7 +132,15 @@ fun MainScreen(
             MessageInput(
                 message = state.currentMessage,
                 onMessageChange = viewModel::onMessageChange,
-                onSend = viewModel::sendMessage,
+                onSend = { viewModel.sendMessage(withVoice = false) },
+                onVoiceClick = {
+                    if (state.atlasState == AtlasState.LISTENING || state.atlasState == AtlasState.SPEAKING) {
+                        viewModel.stopVoice()
+                    } else {
+                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                },
+                isVoiceActive = state.atlasState == AtlasState.LISTENING || state.atlasState == AtlasState.SPEAKING,
                 enabled = !state.isLoading
             )
         }
@@ -142,6 +185,8 @@ fun MessageInput(
     message: String,
     onMessageChange: (String) -> Unit,
     onSend: () -> Unit,
+    onVoiceClick: () -> Unit,
+    isVoiceActive: Boolean,
     enabled: Boolean
 ) {
     Surface(
@@ -155,12 +200,29 @@ fun MessageInput(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Voice button
+            FloatingActionButton(
+                onClick = onVoiceClick,
+                modifier = Modifier.size(56.dp),
+                containerColor = if (isVoiceActive) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                }
+            ) {
+                Icon(
+                    imageVector = if (isVoiceActive) Icons.Default.Stop else Icons.Default.Mic,
+                    contentDescription = "Voice input"
+                )
+            }
+            
+            // Text input
             TextField(
                 value = message,
                 onValueChange = onMessageChange,
                 modifier = Modifier.weight(1f),
                 placeholder = { Text("Message Atlas…") },
-                enabled = enabled,
+                enabled = enabled && !isVoiceActive,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -169,9 +231,10 @@ fun MessageInput(
                 shape = RoundedCornerShape(24.dp)
             )
             
+            // Send button
             Button(
                 onClick = onSend,
-                enabled = enabled && message.isNotBlank(),
+                enabled = enabled && message.isNotBlank() && !isVoiceActive,
                 modifier = Modifier.height(56.dp)
             ) {
                 Text("Send")
