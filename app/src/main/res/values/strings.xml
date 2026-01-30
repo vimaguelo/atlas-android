@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Atlas</string>
+    <string name="send">Send</string>
+    <string name="message_hint">Message Atlas…</string>
+    <string name="voice_button">Voice</string>
+    <string name="listening">Listening…</string>
+    <string name="thinking">Thinking…</string>
+    <string name="speaking">Speaking…</string>
+    <string name="error_network">Network error</string>
+    <string name="error_unknown">Something went wrong</string>
+    <string name="permission_microphone">Microphone permission required for voice input</string>
+</resources>
